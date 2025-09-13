@@ -17,6 +17,9 @@
 #define LED_PIN2 20 //D2
 #define LED_PIN1 21 //D1
 #define LED_PIN0 22 //D0
+#define ROTARY_SW 12
+#define ROTARY_A 10
+#define ROTARY_B 11
 
 extern "C" {
 uint32_t read_runtime_ctr(void) {
@@ -126,24 +129,26 @@ void task1(void *param);
 void task2(void *param);
 void blink_task2();
 //lab_2 ends
+void assign_pin(const uint pin) {
+    gpio_init(pin);
+    gpio_set_dir(pin, GPIO_IN);
+    gpio_pull_up(pin);
+}
 
 
 int main()
 {
-
     //lab_2 starts
     gpio_init(LED_PIN1);
     gpio_set_dir(LED_PIN1, true);
     charactor_sem = xSemaphoreCreateBinary();
     if (charactor_sem == NULL) {
-        while(1) {}
+        while(true) {}
     }
 
     xTaskCreate(task1, "Receiver", 512, NULL, tskIDLE_PRIORITY + 1, NULL);
     xTaskCreate(task2, "Blinker", 512, NULL, tskIDLE_PRIORITY + 1, NULL);
     //lab_2 ends
-
-
 
     static led_params lp1 = { .pin = 20, .delay = 300 };
     stdio_init_all();
@@ -165,7 +170,7 @@ int main()
     xTaskCreate(display_task, "SSD1306", 512, (void *) nullptr,
                 tskIDLE_PRIORITY + 1, nullptr);
 #endif
-#if 1
+#if 0
     xTaskCreate(i2c_task, "i2c test", 512, (void *) nullptr,
                 tskIDLE_PRIORITY + 1, nullptr);
 #endif
@@ -177,21 +182,19 @@ int main()
 
     while(true){};
 }
-
-
 //lab_2 starts
 
 void task1(void *param) {
     int ch;
-
     while (true) {
-        ch = getchar_timeout_us(1000);
+        ch = getchar_timeout_us(0);
         if (ch != PICO_ERROR_TIMEOUT) {
             putchar(ch);
             xSemaphoreGive(charactor_sem);
+        }else {
+            vTaskDelay(1);
         }
     }
-
 }
 
 void blink_task2() {
@@ -204,11 +207,6 @@ void blink_task2() {
 void task2(void *param) {
     while (true) {
         if (xSemaphoreTake(charactor_sem, portMAX_DELAY) == pdTRUE) {
-            blink_task2();
-
-            while (xSemaphoreTake(charactor_sem, pdMS_TO_TICKS(200)) == pdTRUE) {
-
-            }
             blink_task2();
         }
     }
@@ -275,8 +273,6 @@ void modbus_task(void *param) {
         vTaskDelay(3000);
 #endif
     }
-
-
 }
 
 #include "ssd1306os.h"
@@ -290,7 +286,6 @@ void display_task(void *param)
     while(true) {
         vTaskDelay(100);
     }
-
 }
 
 void i2c_task(void *param) {
@@ -321,12 +316,12 @@ void i2c_task(void *param) {
     printf("\n");
 
     while(true) {
-        /*
+
         gpio_put(led_pin, 1);
         vTaskDelay(delay);
         gpio_put(led_pin, 0);
         vTaskDelay(delay);
-        */
+
     }
 
 
