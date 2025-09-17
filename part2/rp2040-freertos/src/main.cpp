@@ -22,6 +22,7 @@
 #define ROTARY_B 11
 #define MIN_FREQ    2
 #define MAX_FREQ    200
+#define DEBOUNCE_TIME_MS 200
 
 extern "C" {
 uint32_t read_runtime_ctr(void) {
@@ -146,21 +147,19 @@ typedef struct {
 
 typedef struct {
     bool led_state;
-    int led_frequency; // make this int
+    int led_frequency;
     uint32_t last_button_time;
     TaskHandle_t blink_task_handle;
     QueueHandle_t queue;
-    QueueHandle_t gpio_semaphore; // no need
+    QueueHandle_t gpio_semaphore;
 } led_data_s;
 
 void gpio_event_task(void *param);
 void led_blink_task(void *param);
-
-void encoder_isr(uint gpio, uint32_t event_mask);
-void button_isr(uint gpio, uint32_t event_mask);
+//void encoder_isr(uint gpio, uint32_t event_mask);
+//void button_isr(uint gpio, uint32_t event_mask);
 void gpio_isr(uint gpio, uint32_t event_mask);
 
-//lab_2 ends
 void assign_pin(const uint pin) {
     gpio_init(pin);
     gpio_set_dir(pin, GPIO_IN);
@@ -169,16 +168,13 @@ void assign_pin(const uint pin) {
 
 static led_data_s *led_data_for_isr = NULL;
 
+//lab_2 ends
 int main()
 {
-    static led_params lp1 = { .pin = 20, .delay = 300 };
     stdio_init_all();
     printf("\nBoot\n");
-
-    //lab_2 starts
     gpio_init(LED_PIN1);
     gpio_set_dir(LED_PIN1, true);
-    //lab_2 ends
 
     //lab_2 part 2
     assign_pin(ROTARY_SW); // Rotary switch
@@ -191,13 +187,11 @@ int main()
     led_data_for_isr = &led_data;
 
     gpio_set_irq_enabled_with_callback(ROTARY_A, GPIO_IRQ_EDGE_FALL, true, &gpio_isr);
-    gpio_set_irq_enabled(ROTARY_SW, GPIO_IRQ_EDGE_FALL, true); // just enable; callback is global
-
+    gpio_set_irq_enabled(ROTARY_SW, GPIO_IRQ_EDGE_FALL, true);
 
     xTaskCreate(gpio_event_task, "EventTask", 512, &led_data, tskIDLE_PRIORITY + 2, NULL);
     xTaskCreate(led_blink_task, "BlinkTask", 512, &led_data, tskIDLE_PRIORITY + 1, &led_data.blink_task_handle);
 
-    //gpio_sem = xSemaphoreCreateBinary();
     vTaskStartScheduler();
 
     while(true){};
@@ -230,7 +224,6 @@ void gpio_isr(uint gpio, uint32_t events) {
 void gpio_event_task(void *param) {
     led_data_s *led = (led_data_s *)param;
 
-
     while (true) {
         gpio_event_s event;
         if (xQueueReceive(led->queue, &event, portMAX_DELAY)) {
@@ -245,13 +238,12 @@ void gpio_event_task(void *param) {
                         printf("LED: OFF\n");
                         gpio_put(LED_PIN1, false);
                     }
-                    xTaskNotifyGive(led->blink_task_handle);
                 }
             }else if (event.type == event_encoder && led->led_state) {
                 if (event.direction == rot_rotate_clockwise) {
-                    led->led_frequency++;
-                }else {
                     led->led_frequency--;
+                }else {
+                    led->led_frequency++;
                 }
                 if (led->led_frequency<MIN_FREQ) {
                     led->led_frequency = MIN_FREQ;
@@ -260,7 +252,6 @@ void gpio_event_task(void *param) {
                     led->led_frequency = MAX_FREQ;
                 }
                 printf("frequency: %d Hz \n", led->led_frequency);
-                xTaskNotifyGive(led->blink_task_handle);
             }
         }
     }
